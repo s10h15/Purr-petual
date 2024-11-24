@@ -1,0 +1,105 @@
+import { isChance, getRandomInt } from "./Helpers/random.js";
+import { getDistance } from "./math.js";
+
+const twoPI = Math.PI * 2;
+const PI180 = Math.PI / 180;
+
+function isRayIntersectsCircle(
+rayStartX, rayStartY,
+rayDirectionX, rayDirectionY,
+circleCenterX, circleCenterY,
+circleRadius,
+maximumLength
+) {
+const vectorToCircleX = circleCenterX - rayStartX;
+const vectorToCircleY = circleCenterY - rayStartY;
+
+const projection = vectorToCircleX * rayDirectionX + vectorToCircleY * rayDirectionY;
+
+const closestPointX = rayStartX + projection * rayDirectionX;
+const closestPointY = rayStartY + projection * rayDirectionY;
+
+const distanceSquared =
+(closestPointX - circleCenterX) * (closestPointX - circleCenterX) +
+(closestPointY - circleCenterY) * (closestPointY - circleCenterY);
+
+const radiusSquared = circleRadius * circleRadius;
+
+if (distanceSquared > radiusSquared) {
+return { isIntersecting: false, x: null, y: null, length: null };
+}
+
+const halfChord = Math.sqrt(radiusSquared - distanceSquared);
+const intersection1 = projection - halfChord;
+const intersection2 = projection + halfChord;
+
+if (intersection1 >= 0 && intersection1 <= maximumLength) { const x=rayStartX + rayDirectionX * intersection1; const y=rayStartY + rayDirectionY * intersection1; return { isIntersecting: true, x, y, length: intersection1 }; } if (intersection2>= 0 && intersection2 <= maximumLength) { const x=rayStartX + rayDirectionX * intersection2; const y=rayStartY + rayDirectionY * intersection2; return { isIntersecting: true, x, y, length: intersection2 }; } return { isIntersecting: false, x: null, y: null, length: null }; } function isRayIntersectsLine( rayStartX, rayStartY, rayDirectionX, rayDirectionY, lineStartX, lineStartY, lineEndX, lineEndY, maximumLength ) { const lineVectorX=lineEndX - lineStartX; const lineVectorY=lineEndY - lineStartY; const cross=rayDirectionX * lineVectorY - rayDirectionY * lineVectorX; if (Math.abs(cross) < 1e-10) { return { isIntersecting: false, x: null, y: null, length: null }; } const startDiffX=lineStartX - rayStartX; const startDiffY=lineStartY - rayStartY; const t=(startDiffX * lineVectorY - startDiffY * lineVectorX) / cross; const u=(startDiffX * rayDirectionY - startDiffY * rayDirectionX) / cross; if (t>= 0 && t <= maximumLength && u>= 0 && u <= 1) { const x=rayStartX + rayDirectionX * t; const y=rayStartY + rayDirectionY * t; return { isIntersecting: true, x, y, length: t }; } return { isIntersecting: false, x: null, y: null, length: null }; } export function getSeeker(x, y) { return { x: x, y: y, radius: 50, maxSpeed: 5, lookDirectionX: 1, lookDirectionY: 0, maxLookLength: 1500, lookLength: 0, lookRotationIsLeft: null, maxRotationSpeed: 2, closestWorldObjects: null, lastWorldGridIndexX: null, lastWorldGridIndexY: null, unexploredGridIndexes: null, explorationGridNumCells: 50, explorationGridCellsSizeX: null, explorationGridCellsSizeY: null, lastExplorationGoalChangeTime: null, lastSeenPlayerX: null, lastSeenPlayerY: null, lastSeenPlayerTime: null, isSawPlayer: false, isSearchingCell: false, cellToFollow: null, prevX: 0, prevY: 0, prevPlayerX: 0, prevPlayerY: 0, isEvenUpdateCall: false, isMovedLastStep: false, id: Math.random() * Number.MAX_SAFE_INTEGER, draw(ctx, offsetX, offsetY, zoomInRate) { const x=(this.x - offsetX) * zoomInRate; const y=(this.y - offsetY) * zoomInRate; const radius=this.radius * zoomInRate; const lineWidth=radius * 0.5; const adjustedRadius=radius - lineWidth * 0.5; ctx.beginPath(); ctx.arc(x, y, adjustedRadius, 0, twoPI); ctx.fillStyle="red" ; ctx.fill(); ctx.strokeStyle="purple" ; ctx.lineWidth=lineWidth; ctx.stroke(); const lookRayLength=this.lookLength * zoomInRate; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + this.lookDirectionX * lookRayLength, y + this.lookDirectionY * lookRayLength); ctx.strokeStyle="white" ; ctx.lineWidth=10 * zoomInRate; ctx.stroke(); }, resolveCollisionCircle() { return null; }, getVertexes() { return [[this.x, this.y]]; }, rotateDegrees(degrees) { const radians=degrees * PI180; const previousX=this.lookDirectionX; this.lookDirectionX=this.lookDirectionX * Math.cos(radians) - this.lookDirectionY * Math.sin(radians); this.lookDirectionY=previousX * Math.sin(radians) + this.lookDirectionY * Math.cos(radians); }, walkTo(x, y) { let dirX=x - this.x; let dirY=y - this.y; const dirLength=Math.sqrt(dirX * dirX + dirY * dirY); dirX /=dirLength; dirY /=dirLength; this.x +=dirX * this.maxSpeed; this.y +=dirY * this.maxSpeed; }, explore(world) { if (this.unexploredGridIndexes==null || this.unexploredGridIndexes.length==0) { this.explorationGridCellsSizeX=(world.gridEndX - world.gridStartX) / this.explorationGridNumCells; this.explorationGridCellsSizeY=(world.gridEndY - world.gridStartY) / this.explorationGridNumCells; this.unexploredGridIndexes=[]; for (let y=0; y < this.explorationGridNumCells; ++y) { for (let x=0; x < this.explorationGridNumCells; ++x) { this.unexploredGridIndexes.push([x, y]); } } } else if (!this.isSearchingCell && this.unexploredGridIndexes.length> 0) {
+				const randomIndex = getRandomInt(0, this.unexploredGridIndexes.length - 1);
+				this.cellToFollow = this.unexploredGridIndexes[randomIndex];
+				this.unexploredGridIndexes.splice(randomIndex, 1);
+				this.isSearchingCell = true;
+				this.lastExplorationGoalChangeTime = performance.now();
+				}
+
+				if (this.isSearchingCell) {
+				const goalX = this.cellToFollow[0] * this.explorationGridCellsSizeX + this.explorationGridCellsSizeX * 0.5 + world.gridStartX;
+				const goalY = this.cellToFollow[1] * this.explorationGridCellsSizeY + this.explorationGridCellsSizeY * 0.5 + world.gridStartY;
+				this.walkTo(goalX, goalY);
+
+				if (getDistance(this.x, this.y, goalX, goalY) < 5 || getDistance(this.x, this.y, this.prevX, this.prevY) < 1) { this.isSearchingCell=false; } } }, killPlayer(player) { const distanceX=player.x - this.x; const distanceY=player.y - this.y; if (Math.sqrt(distanceX * distanceX + distanceY * distanceY) - this.radius < player.radius) { player.isDead=true; } }, updateClosestObjects(world) { if (this.lastWorldGridIndexX==null) { [this.lastWorldGridIndexX, this.lastWorldGridIndexY]=world.getGridIndexFromPoint(this.x, this.y); this.closestWorldObjects=world.getClosestObjectsToPoint(this.x, this.y, 5000); } else { const [currentGridIndexX, currentGridIndexY]=world.getGridIndexFromPoint(this.x, this.y); if (currentGridIndexX !=this.lastWorldGridIndexX || currentGridIndexY !=this.lastWorldGridIndexY) { this.closestWorldObjects=world.getClosestObjectsToPoint(this.x, this.y, 5000); this.isMovedLastStep=true; } } }, lookStraight(player, world) { let smallestLookRay=this.maxLookLength; if (this.closestWorldObjects !=null) { for (let objectIndex=0; objectIndex < this.closestWorldObjects.length; ++objectIndex) { const object=this.closestWorldObjects[objectIndex]; const vertexes=object.getVertexes(); if (vertexes.length==1) { continue; } for (let vertexIndex=0; vertexIndex < vertexes.length; ++vertexIndex) { const lineStart=vertexes[vertexIndex]; let lineEnd; if (object.isClosed) { lineEnd=vertexes[(vertexIndex + 1) % vertexes.length]; } else if (vertexIndex + 1 !=vertexes.length) { lineEnd=vertexes[vertexIndex + 1]; } else { break; } const rayCast=isRayIntersectsLine( this.x, this.y, this.lookDirectionX, this.lookDirectionY, lineStart[0], lineStart[1], lineEnd[0], lineEnd[1], this.maxLookLength ); if (rayCast.isIntersecting && rayCast.length < smallestLookRay) { smallestLookRay=rayCast.length; } } } } const playerRayCast=isRayIntersectsCircle(this.x, this.y, this.lookDirectionX, this.lookDirectionY, player.x, player.y, player.radius, this.maxLookLength); if (playerRayCast.isIntersecting && playerRayCast.length < smallestLookRay) { smallestLookRay=playerRayCast.length; this.isSawPlayer=true; this.lastSeenPlayerX=player.x; this.lastSeenPlayerY=player.y; } else { this.isSawPlayer=false; } this.lookLength=smallestLookRay; }, shakeHead() { if (isChance(0.005)) { this.lookRotationIsLeft=isChance(0.5); } if (!this.isSawPlayer) { if (this.lookRotationIsLeft) { this.rotateDegrees(-this.maxRotationSpeed); } else { this.rotateDegrees(this.maxRotationSpeed); } } }, followPlayer(player, world) { if (this.isSawPlayer) { const targetAngle=Math.atan2(player.y - this.y, player.x - this.x); const currentAngle=Math.atan2(this.lookDirectionY, this.lookDirectionX); let angleDiff=targetAngle - currentAngle; while (angleDiff> Math.PI) angleDiff -= Math.PI * 2;
+					while (angleDiff < -Math.PI) angleDiff +=Math.PI * 2; const rotationSpeedRadians=this.maxRotationSpeed * PI180; if (Math.abs(angleDiff)> rotationSpeedRadians) {
+						if (angleDiff > 0) {
+						this.rotateDegrees(this.maxRotationSpeed);
+						} else {
+						this.rotateDegrees(-this.maxRotationSpeed);
+						}
+						}
+
+						const futurePlayerX = player.x - (this.prevPlayerX - player.x) * player.speed * 10;
+						const futurePlayerY = player.y - (this.prevPlayerY - player.y) * player.speed * 10;
+						this.walkTo(futurePlayerX, futurePlayerY);
+
+						this.lastSeenPlayerTime = performance.now();
+						} else {
+						if (this.lastSeenPlayerX == null) {
+						this.explore(world);
+						} else {
+						this.walkTo(this.lastSeenPlayerX, this.lastSeenPlayerY);
+						if (performance.now() - this.lastSeenPlayerTime > 2000 || getDistance(this.x, this.y, this.lastSeenPlayerX, this.lastSeenPlayerY) < 5) { this.lastSeenPlayerX=null; this.lastSeenPlayerY=null; } } } }, updateMovement(player) { if (this.isEvenUpdateCall) { this.prevX=this.x; this.prevY=this.y; if (this.isSawPlayer) { this.prevPlayerX=player.x; this.prevPlayerY=player.y; } } }, updateCounters() { this.isEvenUpdateCall=!this.isEvenUpdateCall; }, update(player, world) { this.killPlayer(player); this.updateClosestObjects(world); this.lookStraight(player, world); this.shakeHead(); this.followPlayer(player, world); this.updateMovement(player); this.updateCounters(player); } } } const rotatePlayer=()=> {
+							let playerAngle = Math.atan2(game.player.directionY, game.player.directionX) * PI180Back;
+							const deltaX = game.mouse.actualPressStartPosX - game.mouse.x;
+							playerAngle += deltaX * game.player.rotationSpeed;
+
+							const playerAngleRadians = playerAngle * PI180;
+							game.player.directionX = Math.cos(playerAngleRadians);
+							game.player.directionY = Math.sin(playerAngleRadians);
+							}
+
+							directionX: 1,
+							directionY: 0,
+							rotationSpeed: 0.1,
+							visibilityRange: 1000,
+
+							draw3D(ctx, width, height, cameraX, cameraY, directionX, directionY, fieldOfViewDegrees, visibilityRange) {
+							const resolution = width;
+							const slicesWidth = width / resolution;
+
+							const radians = fieldOfViewDegrees * PI180;
+							const rotationStep = (radians * 2) / (resolution - 1);
+							for (let rayIndex = 0; rayIndex < resolution; ++rayIndex) { const rayAngle=-radians + rayIndex * rotationStep; const rayDirectionX=directionX * Math.cos(rayAngle) - directionY * Math.sin(rayAngle); const rayDirectionY=directionX * Math.sin(rayAngle) + directionY * Math.cos(rayAngle); let shortestRayHit=Number.MAX_SAFE_INTEGER; for (let objectIndex=0; objectIndex < this.lastRetrievedGridObjectsDraw.length; ++objectIndex) { const object=this.lastRetrievedGridObjectsDraw[objectIndex]; const vertexes=object.getVertexes(); if (vertexes.length==1) { continue; } for (let vertexIndex=0; vertexIndex < vertexes.length; ++vertexIndex) { const lineStart=vertexes[vertexIndex]; let lineEnd; if (object.isClosed) { lineEnd=vertexes[(vertexIndex + 1) % vertexes.length]; } else if (vertexIndex + 1 !=vertexes.length) { lineEnd=vertexes[vertexIndex + 1]; } else { break; } const rayCast=isRayIntersectsLine( cameraX, cameraY, rayDirectionX, rayDirectionY, lineStart[0], lineStart[1], lineEnd[0], lineEnd[1], visibilityRange ); if (rayCast.isIntersecting && rayCast.length < shortestRayHit) { shortestRayHit=rayCast.length; } } } const sliceX=Math.floor(slicesWidth * rayIndex); const sliceBrightness=1 - (shortestRayHit / visibilityRange); ctx.fillStyle="rgba(255,255,255," + sliceBrightness + ")" ; ctx.fillRect(sliceX, 0, slicesWidth, height); } } updateAreaPosition() { let smallestObjectX=Number.MAX_SAFE_INTEGER; let smallestObjectY=Number.MAX_SAFE_INTEGER; let largestObjectX=-Number.MAX_SAFE_INTEGER; let largestObjectY=-Number.MAX_SAFE_INTEGER; for (const objectsOfSomeTypeKey in this.objects) { const objectsOfSomeType=this.objects[objectsOfSomeTypeKey]; for (let objectIndex=0; objectIndex < objectsOfSomeType.length; ++objectIndex) { const object=objectsOfSomeType[objectIndex]; const objectVertexes=object.getVertexes(); for (let vertexIndex=0; vertexIndex < objectVertexes.length; ++vertexIndex) { const point=objectVertexes[vertexIndex]; if (point[0] < smallestObjectX) { smallestObjectX=point[0]; } if (point[1] < smallestObjectY) { smallestObjectY=point[1]; } if (point[0]> largestObjectX) {
+								largestObjectX = point[0];
+								}
+								if (point[1] > largestObjectY) {
+								largestObjectY = point[1];
+								}
+								}
+								}
+								}
+
+								this.gridStartX = smallestObjectX;
+								this.gridStartY = smallestObjectY;
+								this.gridEndX = largestObjectX;
+								this.gridEndY = largestObjectY;
+								this.gridSizeX = this.gridEndX - this.gridStartX;
+								this.gridSizeY = this.gridEndY - this.gridStartY;
+								}
